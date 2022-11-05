@@ -1,0 +1,23 @@
+Genetisk Algorithm:
+
+Bra för att optimera hyperparametrar: bag_price, bag_type, refund, refund_amount 
+    men hur ska vi skapa en funktion som väljer 7 olika ordrar varje vecka? 
+
+Fundering: beror hyperparametrarna på order-funktionen? Om inte så är det bra, annars blir det svårt
+
+Fundering: Kan man skapa en policy via genetisk algoritm? Känns svårt att skapa fitness funktion
+
+Best result:
+Top score is 15169
+bag price: 19.09668895338536
+refund: 1
+refund_amount: 0.047547511215374684
+bag_type: 3
+k0: 13.279456689697414
+k1: -10.923529098568677
+k2: -9.42498399974674
+k3:28.497018211758732
+k4: 4.743138281730522
+k5: 17.26560964646232
+
+function: k0 + k1*x + k2*x**2 + k3*x**3 + k4*x**4

@@ -1,4 +1,4 @@
-from chromosoneNN import Chromosone
+from NN.chromosoneNN import Chromosone
 import torch as th
 import torch.nn as nn
 import numpy as np

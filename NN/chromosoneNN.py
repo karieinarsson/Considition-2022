@@ -8,8 +8,8 @@ bag_type_resuable = [0, 0, 1, 5, 9, 12]
 bag_type_wash_time = [0, 1, 2, 3, 5, 7]
 bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
 
-mutation_rate = 0.3
-fine_mutation_rate = 0.5
+mutation_rate = 0.05
+fine_mutation_rate = 0.8
 
 init_chrom = dict(
     bag_type = randint(1,5),
@@ -22,7 +22,7 @@ mutate_chrom = dict(
     bag_type = randint(1,5),
     refund = lambda refund: abs(refund-1),
     bag_price = lambda bag_price: uniform(0.95, 1.05) * bag_price,
-    model = lambda v: uniform(0.95, 1.05) * v if uniform(0,1) < fine_mutation_rate else uniform(0,2),
+    model = lambda v: uniform(0.95, 1.05) * v if uniform(0,1) < fine_mutation_rate else uniform(-1,1),
     refund_amount = lambda refund_amount: uniform(0.95, 1.05) * refund_amount
 )
 
@@ -30,17 +30,17 @@ class Model(nn.Module):
     def __init__(self):
         super().__init__()
         self.nn = nn.Sequential(
-            nn.Linear(5, 20),
+            nn.Linear(5, 8),
             nn.ReLU(),
-            nn.Linear(20, 10),
+            nn.Linear(8, 4),
             nn.ReLU(),
-            nn.Linear(10, 1),
+            nn.Linear(4, 1),
             nn.ReLU()
         )
 
         def init_weights(m):
             if type(m) == nn.Linear:
-                th.nn.init.uniform_(m.weight, a=-2, b=2.0)
+                th.nn.init.uniform_(m.weight, a=-1.0, b=1.0)
 
         self.nn.apply(init_weights)
 
@@ -120,10 +120,6 @@ class Chromosone():
     def get_order(self, day, _):
         order = int(self.model.forward(th.tensor([
                     self.bag_type,
-                    #bag_type_co2_production[self.bag_type],
-                    #bag_type_co2_transport[self.bag_type],
-                    #bag_type_resuable[self.bag_type],
-                    #bag_type_wash_time[self.bag_type],
                     self.refund, 
                     self.bag_price, 
                     self.refund_amount, 

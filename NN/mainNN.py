@@ -1,5 +1,4 @@
 from geneticAlgorithmNN import GA
-from multiprocessing import Pool
 import time
 
 #map_name = "Suburbia"
@@ -12,7 +11,12 @@ def main():
 	#assert False
 	#print("Starting game...")
 	s = time.time()
-	ga.run_evolution(generation_limit=100, population_size=100, mutation_fraq=1, function=2, verbose=2, map_name=map_name)
+	ga.run_evolution(
+		generation_limit=50, 
+		population_size=50,  
+		verbose=1, 
+		map_name=map_name
+	)
 	print(f"Total time: {(time.time()-s)/60} minutes")
 
 if __name__ == "__main__":

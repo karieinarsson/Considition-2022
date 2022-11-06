@@ -24,14 +24,9 @@ class GA:
     def run_evolution(self, 
             generation_limit: int=20, 
             population_size: int=10, 
-            mutation_fraq: float=0.1, 
-            fine_mutation_rate: float = 0.5, 
             verbose: int = 1, 
-            function: int = 0,
             map_name: str = "Fancyville"
         ) -> ChromosoneTuple:
-
-        assert population_size % 4 == 0
 
         self.map_name = map_name
         self.verbose = verbose
@@ -44,9 +39,6 @@ class GA:
             if population_size != len(self.population):
                 print(len(self.population))
                 assert False
-
-            self.random_mutation_rate = max(0, 0.5-generation/(mutation_fraq*generation_limit))
-            self.fine_mutation_rate = max(fine_mutation_rate, 1-self.random_mutation_rate)
 
             # Next generation generation
 

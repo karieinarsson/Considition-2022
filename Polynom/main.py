@@ -2,18 +2,16 @@ from geneticAlgorithm import GA
 from multiprocessing import Pool
 import time
 
-#map_name = "Suburbia"
-map_name = "Fancyville"
+map_name = "Suburbia"
+#map_name = "Fancyville"
 
 def main():
 	ga = GA()
 	print("Starting game...")
 	s = time.time()
 	ga.run_evolution(
-		generation_limit=40, 
-		population_size=200, 
-		mutation_fraq=1, 
-		function=2, 
+		generation_limit=50, 
+		population_size=100, 
 		verbose=1, 
 		map_name=map_name
 	)

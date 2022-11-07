@@ -1,6 +1,7 @@
 from random import randint, uniform
 import torch as th
 import torch.nn as nn
+import numpy as np
 
 bag_type_co2_production = [0, 3, 2.4, 3.6, 4.2, 6]
 bag_type_co2_transport = [0, 3, 4.2, 1.8, 3.6, 12]
@@ -30,7 +31,7 @@ class Model(nn.Module):
     def __init__(self):
         super().__init__()
         self.nn = nn.Sequential(
-            nn.Linear(5, 8),
+            nn.Linear(6, 8),
             nn.ReLU(),
             nn.Linear(8, 4),
             nn.ReLU(),
@@ -57,13 +58,15 @@ class Chromosone():
     refund_amount: float # Value from 0 to inf
     model: Model
     
-    def __init__(self, bag_type=None, refund=None, bag_price=None, refund_amount=None, model=None, weights=None) -> None:
+    def __init__(self, bag_type=None, refund=None, bag_price=None, refund_amount=None, model=None, weights=None, queue=None) -> None:
         self.bag_type = init_chrom["bag_type"] if bag_type is None else bag_type
         self.refund = init_chrom["refund"] if refund is None else refund
         self.bag_price = init_chrom["bag_price"](self.bag_type) if bag_price is None else bag_price
         self.refund_amount = init_chrom["refund_amount"](self.bag_price) if refund_amount is None else refund_amount
         self.model = Model() if model is None else model
         self.weights = self.get_params() if weights is None else weights
+        self.queue = np.zeros(7, dtype=int)
+        self.queueday = 0
 
     def mutate(self):
         for gene, value in vars(self).items():
@@ -90,7 +93,7 @@ class Chromosone():
     def get_genes(self):
         val = []
         for gene, value in vars(self).items():
-            if gene != "model" and gene != "weights":
+            if gene not in ["model", "weights", "queue", "queueday"]:
                 val.append(value)
         return val
 
@@ -117,13 +120,17 @@ class Chromosone():
         self.model.nn.apply(self._set_weights)
         self.model.nn = self.model.nn.float()
 
-    def get_order(self, day, _):
-        order = int(self.model.forward(th.tensor([
+    def get_order(self, day):
+        order = min(50000 ,int(self.model.forward(th.tensor([
                     self.bag_type,
                     self.refund, 
                     self.bag_price, 
                     self.refund_amount, 
+                    np.sum(self.queue),
                     day
-                ])))
+                ]))))
+        
+        self.queue[self.queueday%7] = order
+        self.queueday += 1
         return order
     

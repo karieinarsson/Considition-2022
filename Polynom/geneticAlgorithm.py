@@ -1,28 +1,25 @@
 from chromosone import Chromosone
-from functions import f_vars
 from solver import Solver
+from functions import function
 import api
 
 import aiohttp
 import asyncio
 
 import json
+from multiprocessing import Pool
+import numpy as np
+import matplotlib.pyplot as plt
 from typing import List, Tuple
 from math import copysign
 from random import randint, uniform, choices
 from collections import namedtuple
-import requests
-from requests import RequestException
 
 api_key = "97b8ff47-ad44-4018-645e-08dabbf9e85f"
+base_api_path = "https://api.considition.com/api/game/"
 
 bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
 ChromosoneTuple = namedtuple('ChromosoneTuple', 'chromosone fitness')
-
-
-base_api_path = "https://api.considition.com/api/game/"
-
-
 
 class GA:
     def __init__(self) -> None:
@@ -35,10 +32,7 @@ class GA:
     def run_evolution(self, 
             generation_limit: int=20, 
             population_size: int=10, 
-            mutation_fraq: float=0.1, 
-            fine_mutation_rate: float = 0.5, 
             verbose: int = 1, 
-            function: int = 0,
             map_name: str = "Fancyville"
         ) -> ChromosoneTuple:
 
@@ -47,7 +41,6 @@ class GA:
 
         self.map_name = map_name
         self.verbose = verbose
-        self.function = function
         self.population_size = population_size
         self.response = api.map_info(api_key, self.map_name)
         
@@ -56,9 +49,6 @@ class GA:
         for generation in range(generation_limit):
 
             assert population_size == len(self.population), "Population size changed!"
-
-            self.random_mutation_rate = max(0, 0.5-generation/(mutation_fraq*generation_limit))
-            self.fine_mutation_rate = max(fine_mutation_rate, 1-self.random_mutation_rate)
 
             # Next generation generation
             if generation/generation_limit > 0.9:
@@ -99,10 +89,24 @@ class GA:
         print("-----------------------------")
         print("Final Score")
         if verbose > 0:
-            self.verbose = 1
             self.print_status(result)
         game = api.submit_game(api_key, self.map_name, solution)
         print(game['visualizer'])
+
+        xs = np.linspace(0,1,100)
+        y = np.array([function(x, result.chromosone.k) for x in xs])
+
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        ax.spines['left'].set_position('center')
+        ax.spines['bottom'].set_position('zero')
+        ax.spines['right'].set_color('none')
+        ax.spines['top'].set_color('none')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.yaxis.set_ticks_position('left')
+
+        plt.plot(xs, y, 'r')
+        plt.show()
         
         return result
     
@@ -111,12 +115,13 @@ class GA:
 # -------------------------------------------------------------------------
     
     def generate_population(self, size: int) -> List[ChromosoneTuple]:
-        chrom_list = [Chromosone(self.function) for _ in range(size)]
+        chrom_list = [Chromosone() for _ in range(size)]
         return self.get_fitness(chrom_list)
             
     def original_batch(self, population_size: int) -> List[ChromosoneTuple]:
+        pop = self.generate_population(population_size*5)
         batch = sorted(
-                self.generate_population(population_size),
+                pop,
                 key=lambda chromosone: chromosone.fitness,
                 reverse=True
             )
@@ -132,8 +137,8 @@ class GA:
             for c in chromosones:
                 task = asyncio.ensure_future(self.fast_submit_game(session, c))
                 tasks.append(task)
-            k = await asyncio.gather(*tasks, return_exceptions=True)
-            return k
+            chrom_tuples = await asyncio.gather(*tasks, return_exceptions=True)
+            return chrom_tuples
 
     async def fast_submit_game(self, session, c):
         solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
@@ -158,7 +163,10 @@ class GA:
         return ChromosoneTuple(c, submit_game_response['score'])
     
     def get_fitness(self, chrom_list: List[Chromosone]) -> List[ChromosoneTuple]:
-        return asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list)) 
+        #return asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list))
+        with Pool(processes=24) as pool:
+            return pool.map(self.fitness, list(chrom_list))
+
 
 # -------------------------------------------------------------------------
 # -------------------------Mutation----------------------------------------
@@ -175,77 +183,10 @@ class GA:
         childA = Chromosone(*A)
         childB = Chromosone(*B)
         return [childA, childB]
-    
-    def mutation(self, c : Chromosone, random_mutation_rate: float, fine_mutation_rate: float) -> Chromosone:
-        if(uniform(0,1) < random_mutation_rate):
-            c.bag_type = randint(1,4)
-    
-        if(uniform(0,1) > random_mutation_rate):
-            c.refund = abs(c.refund-1)
-        
-        if(uniform(0,1) < random_mutation_rate):
-            c.bag_price = uniform(bag_type_cost[c.bag_type], bag_type_cost[c.bag_type]*20)
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.bag_price *= uniform(0.95,1.05)
-        
-        if(uniform(0,1) < random_mutation_rate):
-            c.refund_amount = uniform(0, c.bag_price)
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.refund_amount *= uniform(0.95, 1.05)
-            
-        if(uniform(0,1 < random_mutation_rate)):
-            c.k0 = uniform(f_vars[c.function][0][0], f_vars[c.function][0][1])
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.k0 *= uniform(0.95,1.05)
-            
-        if(uniform(0,1 < random_mutation_rate)):
-            c.k1 = uniform(f_vars[c.function][1][0], f_vars[c.function][1][1])
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.k1 *= uniform(0.95,1.05)
-        
-        if(uniform(0,1 < random_mutation_rate)):
-            c.k2 = uniform(f_vars[c.function][2][0], f_vars[c.function][2][1])
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.k2 *= uniform(0.95,1.05)
-
-        if(uniform(0,1 < random_mutation_rate)):
-            c.k3 = uniform(f_vars[c.function][3][0], f_vars[c.function][3][1])
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.k3 *= uniform(0.95,1.05)
-            
-        if(uniform(0,1 < random_mutation_rate)):
-            c.k4 = uniform(f_vars[c.function][4][0], f_vars[c.function][4][1])
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.k4 *= uniform(0.95,1.05)
-        
-        if(uniform(0,1 < random_mutation_rate)):
-            c.k5 = uniform(f_vars[c.function][5][0], f_vars[c.function][5][1])
-        elif (uniform(0,1) < fine_mutation_rate):
-            c.k5 *= uniform(0.95,1.05)
-            
-        return c
         
     def uniform_mutation(self, c: Chromosone, percent: float) -> List[Chromosone]:
         c = Chromosone(*c.get_genes())
-        i = randint(0,7)
-        if i == 0:
-            c.bag_price *= uniform(1-percent,1+percent)
-        elif i == 1:
-            c.refund_amount *= uniform(1-percent,1+percent)
-        elif i == 2:
-            c.k0 *= uniform(1-percent,1+percent)
-        elif i == 3:
-            c.k1 *= uniform(1-percent,1+percent)
-        elif i == 4:
-            c.k2 *= uniform(1-percent,1+percent)
-        elif i == 5:
-            c.k3 *= uniform(1-percent,1+percent)
-        elif i == 6:
-            c.k4 *= uniform(1-percent,1+percent)
-        elif i == 7:
-            c.k5 *= uniform(1-percent,1+percent)
-        
-
+        c.mutate(percent)
         return c
 
 # -------------------------------------------------------------------------
@@ -262,24 +203,25 @@ class GA:
     def original_next_gen(self) -> List[ChromosoneTuple]:
         weights = list(map(lambda n: n**2 * copysign(1,n) , [chromosone.fitness for chromosone in self.population]))
         top_n = 5
-        next_generation = [c.chromosone for c in self.population[0:top_n]]
-        next_generation += [self.uniform_mutation(c, 0.05) for c in next_generation]
+        top_n_ct = self.population[0:top_n]
+        next_generation = [self.uniform_mutation(c.chromosone, 0.05) for c in top_n_ct]
 
-        for _ in range((len(self.population)-len(next_generation))//2):
+        for _ in range((len(self.population)-top_n*2)//2):
             parent_a, parent_b = self.selection_pair(weights)
             child_a, child_b = self.uniform_crossover(parent_a.chromosone, parent_b.chromosone)
-            child_a = self.mutation(child_a, self.random_mutation_rate, self.fine_mutation_rate)
-            child_b = self.mutation(child_b, self.random_mutation_rate, self.fine_mutation_rate)
+            child_a.mutate()
+            child_b.mutate()
             next_generation += [child_a, child_b]
 
-        return self.get_fitness(next_generation)
+        return top_n_ct + self.get_fitness(next_generation)
             
     def next_gen_v2(self) -> List[ChromosoneTuple]:
-        top25 = [c.chromosone for c in self.population[0:len(self.population)//4]] #First 25 percent of the next generation
-        mini_tune = [self.uniform_mutation(c, 0.001) for c in top25] # Second 25 percent of the next generation
-        fine_tune = [self.uniform_mutation(c, 0.01) for c in top25] # Third
-        rough_tune = [self.uniform_mutation(c, 0.1) for c in top25]
-        return self.get_fitness(top25 + mini_tune + fine_tune + rough_tune)
+        c = self.population[0].chromosone
+        top25 = [self.uniform_mutation(c, 0.001) for _ in range(self.population_size//4)] #First 25 percent of the next generation
+        mini_tune = [self.uniform_mutation(c, 0.005) for _ in range(self.population_size//4)] # Second 25 percent of the next generation
+        fine_tune = [self.uniform_mutation(c, 0.02) for _ in range(self.population_size//4)] # Third
+        rough_tune = [self.uniform_mutation(c, 0.1) for _ in range((self.population_size//4)-1)]
+        return self.get_fitness([c] + top25 + mini_tune + fine_tune + rough_tune)
 
 # -------------------------------------------------------------------------
 # -------------------------Prints------------------------------------------
@@ -289,14 +231,10 @@ class GA:
         print(f"Top score is {result.fitness}")
 
         print(f"bag price: {result.chromosone.bag_price}", end=", ")
-        print(f"function: {result.chromosone.function}", end=", ")
         print(f"refund: {result.chromosone.refund}", end=", ")
         print(f"refund_amount: {result.chromosone.refund_amount}", end=", ")
         print(f"bag_type: {result.chromosone.bag_type}", end=", ")
         
-        print(f"k0: {result.chromosone.k0}", end=", ")
-        print(f"k1: {result.chromosone.k1}", end=", ")
-        print(f"k2: {result.chromosone.k2}", end=", ")
-        print(f"k3: {result.chromosone.k3}", end=", ")
-        print(f"k4: {result.chromosone.k4}", end=", ")
-        print(f"k5: {result.chromosone.k5}")
+        for i, k in enumerate(result.chromosone.k):
+            print(f"k{i}: {k}", end=", ")
+        print("")

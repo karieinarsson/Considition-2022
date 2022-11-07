@@ -27,5 +27,5 @@ class Solver:
                             bag_type = self.bag_type)
 
         for day in range(0, days):
-            solution.add_order(self.solve_function(day,days))
+            solution.add_order(self.solve_function(day))
         return solution

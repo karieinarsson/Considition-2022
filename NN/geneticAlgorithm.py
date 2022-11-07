@@ -1,14 +1,18 @@
-from random import randint, uniform, choices
+from chromosone import Chromosone
 from solver import Solver
-from collections import namedtuple
-from chromosoneNN import Chromosone
-from multiprocessing import Pool
+import api
+
+import aiohttp
+import asyncio
+
+import json
 from typing import List, Tuple
 from math import copysign
-import api
-import time
+from random import randint, choices
+from collections import namedtuple
 
 api_key = "97b8ff47-ad44-4018-645e-08dabbf9e85f"
+base_api_path = "https://api.considition.com/api/game/"
 
 bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
 ChromosoneTuple = namedtuple('ChromosoneTuple', 'chromosone fitness')
@@ -95,8 +99,9 @@ class GA:
         return self.get_fitness(chrom_list)
             
     def original_batch(self, population_size: int) -> List[ChromosoneTuple]:
+        pop = self.generate_population(population_size*5)
         batch = sorted(
-                self.generate_population(population_size*10),
+                pop,
                 key=lambda chromosone: chromosone.fitness,
                 reverse=True
             )
@@ -106,15 +111,39 @@ class GA:
 # -------------------------Fitness-----------------------------------------
 # -------------------------------------------------------------------------
 
+    async def fast_submit_all_games(self, chromosones):
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for c in chromosones:
+                task = asyncio.ensure_future(self.fast_submit_game(session, c))
+                tasks.append(task)
+            chrom_tuples = await asyncio.gather(*tasks, return_exceptions=True)
+            return chrom_tuples
+
+    async def fast_submit_game(self, session, c):
+        solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
+        solution = solver.Solve(days=31)
+        solution.add_map_name(self.map_name)
+        status_code = 0
+        while status_code != 200:
+            async with session.post(
+                                base_api_path + "submit", 
+                                headers={"x-api-key": api_key}, 
+                                json=json.loads(solution.toJSON())
+                            ) as response:
+                result = await response.json()
+                status_code = response.status
+                if status_code == 200:
+                    return ChromosoneTuple(c, result['score'])
+
     def fitness(self, c : Chromosone) -> List[ChromosoneTuple]:
         solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
         solution = solver.Solve(days=31)
         submit_game_response = api.submit_game(api_key, self.map_name, solution)
         return ChromosoneTuple(c, submit_game_response['score'])
     
-    def get_fitness(self, chrom_list: List[Chromosone]) -> List[ChromosoneTuple]: 
-        with Pool(processes=24) as pool:
-            return pool.map(self.fitness, list(chrom_list))
+    def get_fitness(self, chrom_list: List[Chromosone]) -> List[ChromosoneTuple]:
+        return asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list)) 
 
 # -------------------------------------------------------------------------
 # -------------------------Mutation----------------------------------------

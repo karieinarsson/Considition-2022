@@ -1,4 +1,4 @@
-from geneticAlgorithmNN import GA
+from geneticAlgorithm import GA
 import time
 
 #map_name = "Suburbia"
@@ -9,8 +9,8 @@ def main():
 	print("Starting game...")
 	s = time.time()
 	ga.run_evolution(
-		generation_limit=200, 
-		population_size=200,  
+		generation_limit=40, 
+		population_size=20,  
 		verbose=1, 
 		map_name=map_name
 	)

@@ -21,3 +21,26 @@ k4: 4.743138281730522
 k5: 17.26560964646232
 
 function: k0 + k1*x + k2*x**2 + k3*x**3 + k4*x**4
+
+Novelty search: 
+
+    Fitness function for entire population: standard avikelse 
+
+
+    |min distance from any previous point|
+    min([l**2 for l in ]) k1
+    min([l**2 for l in ]) k2 
+    min([l**2 for l in ]) k3 
+    min([l**2 for l in ]) k4 
+
+    |1-------------4-----------3-------------------------|2
+
+
+bag_type
+bag_price
+refund
+refund_amount
+k0-7
+
+after ga is done convert math function to list of orders per day
+then apply new ga on that

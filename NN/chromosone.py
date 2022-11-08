@@ -9,7 +9,7 @@ bag_type_resuable = [0, 0, 1, 5, 9, 12]
 bag_type_wash_time = [0, 1, 2, 3, 5, 7]
 bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
 
-mutation_rate = 0.05
+mutation_rate = 0.03
 fine_mutation_rate = 0.8
 
 init_chrom = dict(
@@ -31,7 +31,7 @@ class Model(nn.Module):
     def __init__(self):
         super().__init__()
         self.nn = nn.Sequential(
-            nn.Linear(6, 8),
+            nn.Linear(3, 8),
             nn.ReLU(),
             nn.Linear(8, 4),
             nn.ReLU(),
@@ -44,7 +44,7 @@ class Model(nn.Module):
                 th.nn.init.uniform_(m.weight, a=-1.0, b=1.0)
 
         self.nn.apply(init_weights)
-
+        self.nn = self.nn.float()
 
     def forward(self, x):
         return self.nn(x)
@@ -58,6 +58,7 @@ class Chromosone():
     refund_amount: float # Value from 0 to inf
     model: Model
     
+    @th.no_grad()
     def __init__(self, bag_type=None, refund=None, bag_price=None, refund_amount=None, model=None, weights=None, queue=None) -> None:
         self.bag_type = init_chrom["bag_type"] if bag_type is None else bag_type
         self.refund = init_chrom["refund"] if refund is None else refund
@@ -65,9 +66,10 @@ class Chromosone():
         self.refund_amount = init_chrom["refund_amount"](self.bag_price) if refund_amount is None else refund_amount
         self.model = Model() if model is None else model
         self.weights = self.get_params() if weights is None else weights
-        self.queue = np.zeros(7, dtype=int)
-        self.queueday = 0
+        self.orders = []
+        self.cash = 1000
 
+    @th.no_grad()
     def mutate(self):
         for gene, value in vars(self).items():
             if uniform(0,1) > mutation_rate:
@@ -89,14 +91,15 @@ class Chromosone():
                         params.append(mutate_chrom[gene](w))
                 self.set_params(params)
                     
-
+    @th.no_grad()
     def get_genes(self):
         val = []
         for gene, value in vars(self).items():
-            if gene not in ["model", "weights", "queue", "queueday"]:
+            if gene not in ["model", "weights", "queue", "queueday", "cash"]:
                 val.append(value)
         return val
 
+    @th.no_grad()
     def get_params(self):
         params = []
         with th.no_grad():  
@@ -113,24 +116,23 @@ class Chromosone():
             for _ in m.weight.data.flatten():
                 new_data.append(self.weights.pop())
             m.weight.data = th.tensor(new_data, dtype=float).reshape(shape)
-
     
+    @th.no_grad()
     def set_params(self, w):
         self.weights = w
         self.model.nn.apply(self._set_weights)
         self.model.nn = self.model.nn.float()
 
+    @th.no_grad()
     def get_order(self, day):
-        order = min(50000 ,int(self.model.forward(th.tensor([
-                    self.bag_type,
-                    self.refund, 
-                    self.bag_price, 
-                    self.refund_amount, 
-                    np.sum(self.queue),
+        self.cash += sum(self.orders)*(self.bag_price-bag_type_cost[self.bag_type]) - sum(self.orders)*self.refund*bag_type_resuable[self.bag_type]*self.refund_amount
+
+        X = th.tensor([
+                    self.cash,
+                    sum(self.orders[-7:]),
                     day
-                ]))))
-        
-        self.queue[self.queueday%7] = order
-        self.queueday += 1
+                ], dtype=th.float)
+        order = min(50000 ,int(self.model.forward(X)))
+        self.orders.append(order)
         return order
     

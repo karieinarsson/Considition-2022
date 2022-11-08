@@ -10,6 +10,7 @@ from typing import List, Tuple
 from math import copysign
 from random import randint, choices
 from collections import namedtuple
+from multiprocessing import Pool
 
 api_key = "97b8ff47-ad44-4018-645e-08dabbf9e85f"
 base_api_path = "https://api.considition.com/api/game/"
@@ -134,7 +135,9 @@ class GA:
                 result = await response.json()
                 status_code = response.status
                 if status_code == 200:
-                    return ChromosoneTuple(c, result['score'])
+                    score = result["score"]
+                    if type(score) == int:
+                        return ChromosoneTuple(c, score)
 
     def fitness(self, c : Chromosone) -> List[ChromosoneTuple]:
         solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
@@ -143,7 +146,9 @@ class GA:
         return ChromosoneTuple(c, submit_game_response['score'])
     
     def get_fitness(self, chrom_list: List[Chromosone]) -> List[ChromosoneTuple]:
-        return asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list)) 
+        #return asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list)) 
+        with Pool(processes=60) as pool:
+            return pool.map(self.fitness, list(chrom_list))
 
 # -------------------------------------------------------------------------
 # -------------------------Mutation----------------------------------------
@@ -192,17 +197,17 @@ class GA:
     def original_next_gen(self) -> List[ChromosoneTuple]:
         weights = list(map(lambda n: n**2 * copysign(1,n) , [chromosone.fitness for chromosone in self.population]))
         top_n = 5
-        next_generation = [c.chromosone for c in self.population[0:top_n]]
-        next_generation += [self.uniform_mutation(c, 0.05) for c in next_generation]
+        top_n_ct = self.population[0:top_n]
+        next_generation = [self.uniform_mutation(c.chromosone, 0.05) for c in top_n_ct]
 
-        for _ in range((len(self.population)-len(next_generation))//2):
+        for _ in range((len(self.population)-top_n*2)//2):
             parent_a, parent_b = self.selection_pair(weights)
             child_a, child_b = self.uniform_crossover(parent_a.chromosone, parent_b.chromosone)
             child_a.mutate()
             child_b.mutate()
             next_generation += [child_a, child_b]
 
-        return self.get_fitness(next_generation)
+        return top_n_ct + self.get_fitness(next_generation)
 
 # -------------------------------------------------------------------------
 # -------------------------Prints------------------------------------------

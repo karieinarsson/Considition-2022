@@ -11,9 +11,9 @@ from multiprocessing import Pool
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import List, Tuple
-from math import copysign
 from random import randint, uniform, choices
 from collections import namedtuple
+import queue
 
 api_key = "97b8ff47-ad44-4018-645e-08dabbf9e85f"
 base_api_path = "https://api.considition.com/api/game/"
@@ -22,69 +22,75 @@ bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
 ChromosoneTuple = namedtuple('ChromosoneTuple', 'chromosone fitness')
 
 class GA:
-    def __init__(self) -> None:
-        self.population = []
+    def __init__(self, 
+            map_name: str = "Fancyville",
+        ) -> None:
+        self.map_name = map_name
+        self.response = api.map_info(api_key, self.map_name)
+        self.days = 31 if self.map_name == "Suburbia" or self.map_name == "Fancyville" else 365
+
     
 # -------------------------------------------------------------------------
-# -------------------------Main function-----------------------------------
+# -------------------------Fit function------------------------------------
 # -------------------------------------------------------------------------
     
-    def run_evolution(self, 
+    def fit(self,
             generation_limit: int=20, 
             population_size: int=10, 
             verbose: int = 1, 
-            map_name: str = "Fancyville"
-        ) -> ChromosoneTuple:
+        ) -> List[ChromosoneTuple]:
 
-        assert population_size > 10, "Population size under 10"
-        assert population_size % 4 == 0, "Population size not divisible by 4"
+        assert population_size > 4, "Population size under 4"
 
-        self.map_name = map_name
-        self.verbose = verbose
-        self.population_size = population_size
-        self.response = api.map_info(api_key, self.map_name)
-        
-        self.population = self.original_batch(population_size)
+        population =  self.original_batch(population_size)
+
+        q = queue.Queue(5)
 
         for generation in range(generation_limit):
 
-            assert population_size == len(self.population), "Population size changed!"
+            assert population_size == len(population), "Population size changed!"
+
+            random_mutation = 0.8 - generation / generation_limit
 
             # Next generation generation
             if generation/generation_limit > 0.9:
-                next_generation = self.next_gen_v2()
+                next_generation = self.next_gen_v2(population_size, population)
             else:
-                next_generation = self.original_next_gen()
+                next_generation = self.original_next_gen(population, random_mutation)
 
-            self.population = next_generation
+            population = next_generation
 
             # Prints for feedback after each generation
-            if self.verbose == 1:
+            if verbose == 1:
                 for each in next_generation: print(each.fitness)
                 print("-----------------------------")
 
             
-            if self.verbose > 0:
+            if verbose > 0:
                 print(f"Generation {generation}")
                 max_chromosone = max(next_generation, key=lambda chromosone: chromosone.fitness)
                 self.print_status(max_chromosone)
 
-            self.population = sorted(
-                    self.population,
+            population = sorted(
+                    population,
                     key=lambda c: c.fitness,
                     reverse=True
                 )
+            
+            if q.full() and q.get(block=False) == population[0].fitness: return population[0]
+            q.put(population[0].fitness)
         
         # Prints for when algorithm is done
 
-        result = self.population[0]
+        result = population[0]
+
 
         solver = Solver(self.response, result.chromosone.bag_type,
                         result.chromosone.bag_price,
                         result.chromosone.refund_amount,
                         result.chromosone.refund,
                         result.chromosone.get_order)
-        solution = solver.Solve(days=31)
+        solution = solver.Solve(days=self.days)
         
         print("-----------------------------")
         print("Final Score")
@@ -105,10 +111,10 @@ class GA:
         ax.xaxis.set_ticks_position('bottom')
         ax.yaxis.set_ticks_position('left')
 
-        plt.plot(xs, y, 'r')
-        plt.show()
+        #plt.plot(xs, y, 'r')
+        #plt.show()
         
-        return result
+        return population[0]
     
 # -------------------------------------------------------------------------
 # -------------------------Gen Population----------------------------------
@@ -131,40 +137,14 @@ class GA:
 # -------------------------Fitness-----------------------------------------
 # -------------------------------------------------------------------------
 
-    async def fast_submit_all_games(self, chromosones):
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            for c in chromosones:
-                task = asyncio.ensure_future(self.fast_submit_game(session, c))
-                tasks.append(task)
-            chrom_tuples = await asyncio.gather(*tasks, return_exceptions=True)
-            return chrom_tuples
-
-    async def fast_submit_game(self, session, c):
-        solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
-        solution = solver.Solve(days=31)
-        solution.add_map_name(self.map_name)
-        status_code = 0
-        while status_code != 200:
-            async with session.post(
-                                base_api_path + "submit", 
-                                headers={"x-api-key": api_key}, 
-                                json=json.loads(solution.toJSON())
-                            ) as response:
-                result = await response.json()
-                status_code = response.status
-                if status_code == 200:
-                    return ChromosoneTuple(c, result['score'])
-
     def fitness(self, c : Chromosone) -> List[ChromosoneTuple]:
         solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
-        solution = solver.Solve(days=31)
+        solution = solver.Solve(days=self.days)
         submit_game_response = api.submit_game(api_key, self.map_name, solution)
         return ChromosoneTuple(c, submit_game_response['score'])
     
     def get_fitness(self, chrom_list: List[Chromosone]) -> List[ChromosoneTuple]:
-        #return asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list))
-        with Pool(processes=24) as pool:
+        with Pool(processes=60) as pool:
             return pool.map(self.fitness, list(chrom_list))
 
 
@@ -185,43 +165,48 @@ class GA:
         return [childA, childB]
         
     def uniform_mutation(self, c: Chromosone, percent: float) -> List[Chromosone]:
-        c = Chromosone(*c.get_genes())
-        c.mutate(percent)
-        return c
+        C = Chromosone(*c.get_genes())
+        C.mutate(percent)
+        return C
 
 # -------------------------------------------------------------------------
 # -------------------------Selection process-------------------------------
 # -------------------------------------------------------------------------
 
-    def selection_pair(self, weights) -> Tuple[ChromosoneTuple]:
+    def selection_pair(self, weights, population) -> Tuple[ChromosoneTuple]:
         return choices(
-            population = self.population,
+            population = population,
             weights = [x + abs(min(weights)) for x in weights],
             k=2
         )
  
-    def original_next_gen(self) -> List[ChromosoneTuple]:
-        weights = list(map(lambda n: n**2 * copysign(1,n) , [chromosone.fitness for chromosone in self.population]))
-        top_n = 5
-        top_n_ct = self.population[0:top_n]
-        next_generation = [self.uniform_mutation(c.chromosone, 0.05) for c in top_n_ct]
+    def original_next_gen(self, population, random_mutation) -> List[ChromosoneTuple]:
+        weights = [chromosone.fitness for chromosone in population]
+        top_n = 2
+        top_n_ct = population[0:top_n]
+        next_generation = [self.uniform_mutation(c.chromosone, 0.001) for c in top_n_ct]
 
-        for _ in range((len(self.population)-top_n*2)//2):
-            parent_a, parent_b = self.selection_pair(weights)
+        for _ in range((len(population)-top_n*2)//2):
+            parent_a, parent_b = self.selection_pair(weights, population)
             child_a, child_b = self.uniform_crossover(parent_a.chromosone, parent_b.chromosone)
-            child_a.mutate()
-            child_b.mutate()
+            if uniform(0,1) < random_mutation:
+                child_a.random_mutate()
+                child_b.random_mutate()
+            else:
+                child_a.mutate(1)
+                child_b.mutate(1)
             next_generation += [child_a, child_b]
 
         return top_n_ct + self.get_fitness(next_generation)
             
-    def next_gen_v2(self) -> List[ChromosoneTuple]:
-        c = self.population[0].chromosone
-        top25 = [self.uniform_mutation(c, 0.001) for _ in range(self.population_size//4)] #First 25 percent of the next generation
-        mini_tune = [self.uniform_mutation(c, 0.005) for _ in range(self.population_size//4)] # Second 25 percent of the next generation
-        fine_tune = [self.uniform_mutation(c, 0.02) for _ in range(self.population_size//4)] # Third
-        rough_tune = [self.uniform_mutation(c, 0.1) for _ in range((self.population_size//4)-1)]
-        return self.get_fitness([c] + top25 + mini_tune + fine_tune + rough_tune)
+    def next_gen_v2(self, population_size, population) -> List[ChromosoneTuple]:
+        c = population[0]
+        top25 = [self.uniform_mutation(c.chromosone, 0.001) for _ in range(population_size//4)] #First 25 percent of the next generation
+        mini_tune = [self.uniform_mutation(c.chromosone, 0.01) for _ in range(population_size//4)] # Second 25 percent of the next generation
+        fine_tune = [self.uniform_mutation(c.chromosone, 0.1) for _ in range(population_size//4)] # Third
+        rough_tune = [self.uniform_mutation(c.chromosone, 1) for _ in range((population_size//4)-1)]
+        return [c] + self.get_fitness(top25 + mini_tune + fine_tune + rough_tune)
+        
 
 # -------------------------------------------------------------------------
 # -------------------------Prints------------------------------------------

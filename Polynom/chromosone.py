@@ -1,17 +1,17 @@
-from functions import function, function_vars
+from functions import function, function_vars, func_param_dict, mutation_values_dict
 from random import randint, uniform
 from typing import List
 
 bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
-mutation_rate = 0.1
-fine_mutation_rate = 0.5
+
+mutation_rate = 1/8
 
 init_chrom = dict(
     bag_type        =  randint(1,4),
     refund          =  randint(0,1),
     bag_price       = lambda bag_type: uniform(bag_type_cost[bag_type], bag_type_cost[bag_type]*10),
     refund_amount   = lambda bag_price: uniform(0, bag_price),
-    k               = lambda n_k: [uniform(function_vars[k][0], function_vars[k][1]) for k in range(n_k)]
+    k               = lambda n_k: [uniform(func_param_dict["manual_function1"][k][0], func_param_dict["manual_function1"][k][1]) for k in range(n_k)]
 )
 
 mutate_chrom = dict(
@@ -20,10 +20,9 @@ mutate_chrom = dict(
     bag_price     = lambda bag_price, mutation_val: uniform(1-mutation_val, 1+mutation_val) * bag_price if uniform(0,1) < mutation_rate else bag_price,
     refund_amount = lambda refund_amount, mutation_val: uniform(1-mutation_val, 1+mutation_val) * refund_amount if uniform(0,1) < mutation_rate else refund_amount,
 
-    k = lambda ks, mutation_val: [uniform(function_vars[idx][0], function_vars[idx][1]) if uniform(0,1) < mutation_rate
-                                        else uniform(1-mutation_val, 1+mutation_val) * k if uniform(0,1) < fine_mutation_rate
-                                        else k for idx, k in enumerate(ks)]
-)
+    k             = lambda ks, mutation_val: [uniform(1-mutation_val*mutation_values_dict["manual_function1"]["k"][i], 1+mutation_val*mutation_values_dict["manual_function1"]["k"][i]) * k 
+                                                if uniform(0,1) < mutation_rate else k for i, k in enumerate(ks)]
+        )
 
 class Chromosone():
     # Genes:
@@ -39,12 +38,27 @@ class Chromosone():
         self.refund = init_chrom["refund"] if refund is None else refund
         self.bag_price = init_chrom["bag_price"](self.bag_type) if bag_price is None else bag_price
         self.refund_amount = init_chrom["refund_amount"](self.bag_price) if refund_amount is None else refund_amount
-        self.k = init_chrom["k"](len(function_vars)) if k is None else k
-
+        self.k = init_chrom["k"](len(func_param_dict["manual_function1"])) if k is None else k
 
     def mutate(self, mutation_val=0.05):
         for gene, value in vars(self).items():
-            self.__dict__[gene] = mutate_chrom[gene](value, mutation_val)
+            if gene == "k":
+                self.__dict__[gene] = mutate_chrom[gene](value, mutation_val)
+                continue
+            self.__dict__[gene] = mutate_chrom[gene](value, mutation_val*mutation_values_dict["manual_function1"][gene])
+
+    def random_mutate(self):
+        if uniform(0, 1) < mutation_rate:
+            self.bag_type = init_chrom["bag_type"]
+        if uniform(0, 1) < mutation_rate:
+            self.refund = init_chrom["refund"]
+        if uniform(0, 1) < mutation_rate:
+            self.bag_price = init_chrom["bag_price"](self.bag_type)
+        if uniform(0, 1) < mutation_rate:
+            self.refund_amount = init_chrom["refund_amount"](self.bag_price)
+        if uniform(0, 1) < mutation_rate:
+            self.k = init_chrom["k"](len(func_param_dict["manual_function1"]))
+        
 
     def get_genes(self):
         val = []

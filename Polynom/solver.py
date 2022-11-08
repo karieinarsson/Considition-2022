@@ -26,9 +26,5 @@ class Solver:
 
         for day in range(0, days):
             solution.add_order(self.solve_function(day,days))
-        
-        #orders = deque(solution.orders)
-        #orders.rotate(-1)
-        #solution.orders = list(orders)
-        
+
         return solution

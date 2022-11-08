@@ -7,8 +7,8 @@ bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
 mutation_rate = 1/8
 
 init_chrom = dict(
-    bag_type        =  randint(1,4),
-    refund          =  randint(0,1),
+    bag_type        = randint(1,4),
+    refund          = randint(0,1),
     bag_price       = lambda bag_type: uniform(bag_type_cost[bag_type], bag_type_cost[bag_type]*10),
     refund_amount   = lambda bag_price: uniform(0, bag_price),
     k               = lambda n_k: [uniform(func_param_dict["manual_function1"][k][0], func_param_dict["manual_function1"][k][1]) for k in range(n_k)]

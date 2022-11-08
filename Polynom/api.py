@@ -37,8 +37,8 @@ def submit_game(api_key, map_name, solution):
             status_code = response.status_code
             if response.status_code == 200:
                 return response.json()
-            print("Fatal Error: could not submit game")
-            print(str(response.status_code) + " " + response.reason + ":\n " + response.text)
+            #print("Fatal Error: could not submit game")
+            #print(str(response.status_code) + " " + response.reason + ":\n " + response.text)
     except RequestException as e:
         print("Fatal Error: could not submit game")
         print("Something went wrong with the request: " + str(e))

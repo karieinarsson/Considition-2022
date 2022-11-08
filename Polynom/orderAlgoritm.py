@@ -43,7 +43,7 @@ class OA:
         population = [best_orders] + [self.mutate(best_orders) for _ in range(population_size-1)]
         population = self.get_fitness(population, solution)
 
-        #q = queue.Queue(15)
+        q = queue.Queue(15)
 
         gen = 0 
         while True:
@@ -54,8 +54,8 @@ class OA:
                 print(f"Top score for generation {gen} is {population[0].fitness}")
                 print(f"{population[0].array}")
 
-            #if q.full() and q.get() == population[0].fitness: return population[0]
-            #q.put(population[0].fitness)
+            if q.full() and q.get() == population[0].fitness: return population[0]
+            q.put(population[0].fitness)
             self.mutation_rate = max(0.1,mutation_rate-gen*mutation_rate/30)
 
 # -------------------------------------------------------------------------
@@ -89,14 +89,15 @@ class OA:
                 if status_code == 200:
                     return Chrom(orders, result['score'])
 
+    def get_fitness(self, chrom_list, solution):
+        population = asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list, solution))
+        return sorted(population, key=lambda c: c.fitness, reverse=True)
+
     def fitness(self, orders, solution):
         solution.orders = orders
         submit_game_response = api.submit_game(self.api_key, self.map_name, solution)
         return Chrom(orders, submit_game_response['score'])
 
-    def get_fitness(self, chrom_list, solution):
-        population = asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list, solution))
-        return sorted(population, key=lambda c: c.fitness, reverse=True)
 
 # -------------------------------------------------------------------------
 # -------------------------Mutation----------------------------------------

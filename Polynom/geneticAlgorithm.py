@@ -20,8 +20,8 @@ class GA:
             map_name: str = "Fancyville"
         ) -> None:
         self.map_name = map_name
-        self.response = 0
-        self.days = 365
+        self.response = api.map_info(api_key, self.map_name)
+        self.days = 31 if self.map_name == "Suburbia" or self.map_name == "Fancyville" else 365
         
 
 
@@ -110,7 +110,7 @@ class GA:
         return self.get_fitness(chrom_list)
             
     def original_batch(self, population_size: int) -> List[ChromosoneTuple]:
-        pop = self.generate_population(population_size*1)
+        pop = self.generate_population(population_size*5)
         batch = sorted(
                 pop,
                 key=lambda chromosone: chromosone.fitness,
@@ -133,7 +133,7 @@ class GA:
 
     async def fast_submit_game(self, session, c):
         solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
-        solution = solver.Solve(days=365)
+        solution = solver.Solve(days=self.days)
         solution.add_map_name(self.map_name)
         status_code = 0
         while status_code != 200:
@@ -151,18 +151,15 @@ class GA:
 
                 if status_code == 200:
                     return ChromosoneTuple(c, result['score'])
-                
+    
+    def get_fitness(self, chrom_list: List[Chromosone]) -> List[ChromosoneTuple]:
+        return asyncio.get_event_loop().run_until_complete(self.fast_submit_all_games(chrom_list))                
 
     def fitness(self, c : Chromosone) -> List[ChromosoneTuple]:
         solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
         solution = solver.Solve(days=self.days)
         submit_game_response = api.submit_game(api_key, self.map_name, solution)
         return ChromosoneTuple(c, submit_game_response['score'])
-    
-    def get_fitness(self, chrom_list: List[Chromosone]) -> List[ChromosoneTuple]:
-        with Pool(processes=60) as pool:
-            return pool.map(self.fitness, list(chrom_list))
-
 
 # -------------------------------------------------------------------------
 # -------------------------Mutation----------------------------------------

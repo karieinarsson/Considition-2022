@@ -1,12 +1,5 @@
 import math
 
-#För fancyville (31dagar, 10 population) körde vi:
-#   k0 = [-20,0], k1=[50,500], k2=[-50,0], k3 = [0,200]
-
-#k1 ish upp till  2000
-#k0 är bra
-#k2 är bra
-# k3 0:500
 func_param_dict = dict(manual_function1 = [[-20,0], [50, 500] , [-50,0] , [0, 200]],
                        manual_function2 = [[-20,0], [50, 500] , [-50,0] , [0, 200], [0.5, 20], [0, 10], [0.1, 50], [-math.pi, math.pi]] )
 

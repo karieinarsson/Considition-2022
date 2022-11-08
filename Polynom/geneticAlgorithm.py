@@ -1,6 +1,9 @@
 from chromosone import Chromosone
 from solver import Solver
 import api
+import json
+import aiohttp
+import asyncio
 
 from multiprocessing import Pool
 from typing import List, Tuple
@@ -10,14 +13,17 @@ import queue
 
 api_key = "97b8ff47-ad44-4018-645e-08dabbf9e85f"
 ChromosoneTuple = namedtuple('ChromosoneTuple', 'chromosone fitness')
+base_api_path = "https://api.considition.com/api/game/"
 
 class GA:
     def __init__(self, 
-            map_name: str = "Fancyville",
+            map_name: str = "Fancyville"
         ) -> None:
         self.map_name = map_name
-        self.response = api.map_info(api_key, self.map_name)
-        self.days = 31 if self.map_name == "Suburbia" or self.map_name == "Fancyville" else 365
+        self.response = 0
+        self.days = 365
+        
+
 
     
 # -------------------------------------------------------------------------
@@ -37,7 +43,7 @@ class GA:
         q = queue.Queue(5)
 
         for generation in range(generation_limit):
-
+            
             assert population_size == len(population), "Population size changed!"
 
             random_mutation = 0.8 - generation / generation_limit
@@ -57,7 +63,7 @@ class GA:
 
             
             if verbose > 0:
-                print(f"Generation {generation}")
+                print(f"Generation {generation+1}")
                 max_chromosone = max(next_generation, key=lambda chromosone: chromosone.fitness)
                 self.print_status(max_chromosone)
 
@@ -67,9 +73,13 @@ class GA:
                     reverse=True
                 )
             
-            if q.full() and q.get(block=False) == population[0].fitness: return population[0]
+            if q.full() and q.get(block=False) == population[0].fitness: 
+                return population[0]
             q.put(population[0].fitness)
-        
+
+            if generation > 5 and population[0].fitness < 0:
+                return population[0]
+
         # Prints for when algorithm is done
 
         result = population[0]
@@ -100,7 +110,7 @@ class GA:
         return self.get_fitness(chrom_list)
             
     def original_batch(self, population_size: int) -> List[ChromosoneTuple]:
-        pop = self.generate_population(population_size*5)
+        pop = self.generate_population(population_size*1)
         batch = sorted(
                 pop,
                 key=lambda chromosone: chromosone.fitness,
@@ -111,6 +121,37 @@ class GA:
 # -------------------------------------------------------------------------
 # -------------------------Fitness-----------------------------------------
 # -------------------------------------------------------------------------
+
+    async def fast_submit_all_games(self, chromosones):
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for c in chromosones:
+                task = asyncio.ensure_future(self.fast_submit_game(session, c))
+                tasks.append(task)
+            chrom_tuples = await asyncio.gather(*tasks, return_exceptions=True)
+            return chrom_tuples
+
+    async def fast_submit_game(self, session, c):
+        solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)
+        solution = solver.Solve(days=365)
+        solution.add_map_name(self.map_name)
+        status_code = 0
+        while status_code != 200:
+            async with session.post(
+                                base_api_path + "submit", 
+                                headers={"x-api-key": api_key}, 
+                                json=json.loads(solution.toJSON())
+                            ) as response:
+                status_code = response.status
+                result = await response.json()
+                if response.status != 200:
+                    print("You've been gnomed!!", end=" ")
+                    continue
+                result = await response.json()
+
+                if status_code == 200:
+                    return ChromosoneTuple(c, result['score'])
+                
 
     def fitness(self, c : Chromosone) -> List[ChromosoneTuple]:
         solver = Solver(self.response, c.bag_type, c.bag_price, c.refund_amount, c.refund, c.get_order)

@@ -1,4 +1,5 @@
 from solution import Solution
+from collections import deque
 
 
 class Solver:
@@ -9,10 +10,7 @@ class Solver:
     bag_type_wash_time = [1, 2, 3, 5, 7]
 
     def __init__(self, game_info, bag_type, bag_price, refund_amount, recycle_refund_choice, solve_function):
-        self.days = None
-        self.population = game_info["population"]
-        self.company_budget = game_info["companyBudget"]
-        self.behavior = game_info["behavior"]
+
         self.bag_type = bag_type
         self.bag_price = bag_price
         self.refund_amount = refund_amount
@@ -28,4 +26,9 @@ class Solver:
 
         for day in range(0, days):
             solution.add_order(self.solve_function(day,days))
+        
+        #orders = deque(solution.orders)
+        #orders.rotate(-1)
+        #solution.orders = list(orders)
+        
         return solution

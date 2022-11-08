@@ -1,4 +1,4 @@
-from functions import function, function_vars, func_param_dict, mutation_values_dict
+from functions import function, func_param_dict, mutation_values_dict
 from random import randint, uniform
 from typing import List
 

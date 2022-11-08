@@ -17,11 +17,11 @@ def main():
 	batches = 1
 	ga_population_size = 10
 	ga_generations = 1
-	verbose = 0
+	verbose = 2
 
 	# Order algoritm vars
 	oa_population_size = 2
-	oa_generations = 50
+	oa_generations = 5
 	oa_mutation_rate = 0.5
 
 	

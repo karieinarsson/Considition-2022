@@ -1,24 +1,14 @@
 from chromosone import Chromosone
 from solver import Solver
-from functions import function
 import api
 
-import aiohttp
-import asyncio
-
-import json
 from multiprocessing import Pool
-import numpy as np
-import matplotlib.pyplot as plt
 from typing import List, Tuple
 from random import randint, uniform, choices
 from collections import namedtuple
 import queue
 
 api_key = "97b8ff47-ad44-4018-645e-08dabbf9e85f"
-base_api_path = "https://api.considition.com/api/game/"
-
-bag_type_cost = [0, 1.7, 1.75, 6, 25, 200]
 ChromosoneTuple = namedtuple('ChromosoneTuple', 'chromosone fitness')
 
 class GA:
@@ -92,27 +82,12 @@ class GA:
                         result.chromosone.get_order)
         solution = solver.Solve(days=self.days)
         
-        print("-----------------------------")
-        print("Final Score")
-        if verbose > 0:
-            self.print_status(result)
         game = api.submit_game(api_key, self.map_name, solution)
-        print(game['visualizer'])
-
-        xs = np.linspace(0,1,100)
-        y = np.array([function(x, result.chromosone.k) for x in xs])
-
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        ax.spines['left'].set_position('center')
-        ax.spines['bottom'].set_position('zero')
-        ax.spines['right'].set_color('none')
-        ax.spines['top'].set_color('none')
-        ax.xaxis.set_ticks_position('bottom')
-        ax.yaxis.set_ticks_position('left')
-
-        #plt.plot(xs, y, 'r')
-        #plt.show()
+        if verbose > 0:
+            print("-----------------------------")
+            print("Final Score")
+            self.print_status(result)
+            print(game['visualizer'])
         
         return population[0]
     
